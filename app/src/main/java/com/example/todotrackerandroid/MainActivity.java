@@ -2,6 +2,7 @@ package com.example.todotrackerandroid;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -16,6 +17,13 @@ import com.auth0.android.callback.BaseCallback;
 import com.auth0.android.management.ManagementException;
 import com.auth0.android.management.UsersAPIClient;
 import com.auth0.android.result.UserProfile;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.mongodb.lang.NonNull;
+import com.mongodb.stitch.android.core.Stitch;
+import com.mongodb.stitch.android.core.StitchAppClient;
+import com.mongodb.stitch.android.core.auth.StitchUser;
+import com.mongodb.stitch.core.auth.providers.anonymous.AnonymousCredential;
 
 public class MainActivity extends AppCompatActivity {
     private UsersAPIClient usersClient;
@@ -54,8 +62,30 @@ public class MainActivity extends AppCompatActivity {
                                     @Override
                                     public void onSuccess(UserProfile profile) {
                                         // Display the user profile
-                                        TextView textView = findViewById(R.id.credentials);
-                                        textView.setText(profile.getId());
+                                        TextView userName = findViewById(R.id.credentials);
+                                        runOnUiThread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                userName.setText(profile.getName());
+                                            }
+                                        });
+
+                                        // Connect to MongoDB via Stitch
+                                        final StitchAppClient client = Stitch.getDefaultAppClient();
+                                        client.getAuth().loginWithCredential(new AnonymousCredential()).addOnCompleteListener(
+                                                new OnCompleteListener<StitchUser>() {
+                                                    @Override
+                                                    public void onComplete(@NonNull final Task<StitchUser> task) {
+                                                        if (task.isSuccessful()) {
+                                                            Log.d("myApp", String.format(
+                                                                    "logged in as user %s with provider %s",
+                                                                    task.getResult().getId(),
+                                                                    task.getResult().getLoggedInProviderType()));
+                                                        } else {
+                                                            Log.e("myApp", "failed to log in", task.getException());
+                                                        }
+                                                    }
+                                                });
                                     }
 
                                     @Override
