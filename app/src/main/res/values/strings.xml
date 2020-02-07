@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Todo Tracker Android</string>
+    <string name="com_auth0_client_id">VZipdD4W1ATXCar3kGSJBHte5eLEMA52</string>
+    <string name="com_auth0_domain">hdansin.auth0.com</string>
+    <string name="login">Log in</string>
+    <string name="logout">Log out</string>
+</resources>
