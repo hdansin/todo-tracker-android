@@ -3,12 +3,21 @@ package com.example.todotrackerandroid;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
+import androidx.navigation.NavController;
+import androidx.navigation.Navigation;
+import androidx.navigation.ui.AppBarConfiguration;
+import androidx.navigation.ui.NavigationUI;
 
 import com.auth0.android.Auth0;
 import com.auth0.android.authentication.AuthenticationAPIClient;
@@ -25,6 +34,12 @@ import com.mongodb.stitch.android.core.StitchAppClient;
 import com.mongodb.stitch.android.core.auth.StitchUser;
 import com.mongodb.stitch.core.auth.providers.anonymous.AnonymousCredential;
 
+import org.bson.BsonValue;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.Collections;
+
 public class MainActivity extends AppCompatActivity {
     private UsersAPIClient usersClient;
     private AuthenticationAPIClient authenticationAPIClient;
@@ -33,14 +48,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Button loginButton = findViewById(R.id.logout);
-        loginButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                logout();
-            }
-        });
+        // Nav
+        Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(myToolbar);
 
+        // Auth0
         Auth0 auth0 = new Auth0(this);
         auth0.setOIDCConformant(true);
 
@@ -50,6 +62,33 @@ public class MainActivity extends AppCompatActivity {
         authenticationAPIClient = new AuthenticationAPIClient(auth0);
         getProfile(accessToken);
 
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu, menu);
+        return true;
+    }
+
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.action_settings:
+                // User chose the "Settings" item, show the app settings UI...
+                return true;
+
+            case R.id.logOut:
+                // User chose to Log Out, call logout()
+                logout();
+                return true;
+
+            default:
+                // If we got here, the user's action was not recognized.
+                // Invoke the superclass to handle it.
+                return super.onOptionsItemSelected(item);
+
+        }
     }
 
     private void getProfile(String accessToken) {
@@ -63,27 +102,57 @@ public class MainActivity extends AppCompatActivity {
                                     public void onSuccess(UserProfile profile) {
                                         // Display the user profile
                                         TextView userName = findViewById(R.id.credentials);
-                                        runOnUiThread(new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                userName.setText(profile.getName());
-                                            }
-                                        });
+                                        runOnUiThread(() -> userName.setText(profile.getName()));
 
                                         // Connect to MongoDB via Stitch
                                         final StitchAppClient client = Stitch.getDefaultAppClient();
                                         client.getAuth().loginWithCredential(new AnonymousCredential()).addOnCompleteListener(
-                                                new OnCompleteListener<StitchUser>() {
-                                                    @Override
-                                                    public void onComplete(@NonNull final Task<StitchUser> task) {
-                                                        if (task.isSuccessful()) {
-                                                            Log.d("myApp", String.format(
-                                                                    "logged in as user %s with provider %s",
-                                                                    task.getResult().getId(),
-                                                                    task.getResult().getLoggedInProviderType()));
-                                                        } else {
-                                                            Log.e("myApp", "failed to log in", task.getException());
+                                                task -> {
+                                                    if (task.isSuccessful()) {
+                                                        Log.d("myApp", String.format(
+                                                                "logged in as user %s with provider %s",
+                                                                task.getResult().getId(),
+                                                                task.getResult().getLoggedInProviderType()));
+                                                    } else {
+                                                        Log.e("myApp", "failed to log in", task.getException());
+                                                    }
+                                                });
+
+                                        // Call "getUser()" Stitch function to get user settings and task list
+                                        client.callFunction("getUser", Collections.singletonList(profile.getId()), BsonValue.class)
+                                                .addOnCompleteListener(task -> {
+                                                    if (task.isSuccessful()) {
+                                                        // Read JSON Object into Java
+                                                        String userBson = task.getResult().toString();
+                                                        try {
+                                                            JSONObject userObject = new JSONObject(userBson);
+                                                            JSONArray taskListObject = userObject.getJSONArray("task_list");
+                                                            Log.d("myApp", taskListObject.getJSONObject(0).toString());
+
+                                                            // Display the task list
+                                                            for (int i = 0; i < taskListObject.length(); i++) {
+                                                                // Create the task elements
+                                                                ScrollView taskView = findViewById(R.id.taskView);
+                                                                LinearLayout taskLayout = findViewById(R.id.taskLayout);
+
+                                                                TextView taskBody = new TextView(getApplicationContext());
+                                                                String taskBodyString = taskListObject.getJSONObject(i).getString("body");
+                                                                Log.d("myApp", taskBodyString);
+                                                                taskBody.setText(taskBodyString);
+                                                                taskLayout.addView(taskBody);
+                                                            }
+
                                                         }
+                                                        catch (Exception e){
+                                                            Log.e("myApp", "Error assigning BSON to JSON.");
+                                                        }
+
+
+                                                        Log.d("myApp", String.format("%s", userBson));
+
+
+                                                    } else {
+                                                        Log.e("myApp", "Error calling function:", task.getException());
                                                     }
                                                 });
                                     }
@@ -99,6 +168,7 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onFailure(AuthenticationException error) {
                         // Show error
+
                     }
                 });
     }
